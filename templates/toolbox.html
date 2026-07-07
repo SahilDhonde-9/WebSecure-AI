@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}Manual Utility Toolbox{% endblock %}
+{% block content %}
+<div class="banner grid-2">
+    <div class="card">
+        <div class="section-title">
+            <div>
+                <h2>Manual Utility Toolbox</h2>
+                <p>Use the legacy reconnaissance and analysis helpers alongside the new dashboard.</p>
+            </div>
+        </div>
+        <div class="field-group">
+            <label>Target Domain / Hostname</label>
+            <input id="input_m2" placeholder="e.g., google.com">
+            <button class="primary" onclick="triggerModule('2', 'input_m2')">Run DNS Lookup</button>
+            <div id="output_m2" class="console" style="display:none;"></div>
+        </div>
+        <div class="field-group" style="margin-top:20px;">
+            <label>Software Name</label>
+            <input id="input_m5_name" placeholder="e.g., apache">
+            <label>Version</label>
+            <input id="input_m5_ver" placeholder="e.g., 2.4.20">
+            <button class="primary" onclick="triggerModule('5', 'input_m5_name', 'input_m5_ver')">Analyze Version</button>
+            <div id="output_m5" class="console" style="display:none;"></div>
+        </div>
+        <div class="field-group" style="margin-top:20px;">
+            <label>Plaintext String</label>
+            <input id="input_m20" placeholder="Type text to hash...">
+            <button class="primary" onclick="triggerModule('20', 'input_m20')">Generate SHA-256</button>
+            <div id="output_m20" class="console" style="display:none;"></div>
+        </div>
+    </div>
+    <div class="card">
+        <h3>Live Toolbox Output</h3>
+        <div class="console info" id="toolboxIntro">Target Domain: google.com\n[+] Resolved IP: 142.250.143.138</div>
+        <div class="console" id="toolboxExample" style="margin-top:16px;">Software Name: apache\nVersion: 2.4.20</div>
+        <div class="console" id="toolboxNotice" style="margin-top:16px;">Plaintext String hashing will appear here when you run the utility.</div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    const DEFSEC_TARGET_KEY = 'defsec_target';
+
+    function initSavedTarget(inputId) {
+        const stored = localStorage.getItem(DEFSEC_TARGET_KEY);
+        const input = document.getElementById(inputId);
+        if (stored) {
+            input.value = stored;
+        }
+        input.addEventListener('input', () => {
+            const value = input.value.trim();
+            if (value) {
+                localStorage.setItem(DEFSEC_TARGET_KEY, value);
+            } else {
+                localStorage.removeItem(DEFSEC_TARGET_KEY);
+            }
+        });
+    }
+
+    function triggerModule(modId, elementId, extraElementId = null) {
+        const inputVal = document.getElementById(elementId).value;
+        const extraVal = extraElementId ? document.getElementById(extraElementId).value : '';
+        const consoleDiv = document.getElementById(`output_m${modId}`);
+
+        consoleDiv.style.display = 'block';
+        consoleDiv.className = 'console info';
+        consoleDiv.textContent = 'Processing request on backend server...';
+
+        fetch('/run-module', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ module_id: modId, input_val: inputVal, extra_val: extraVal })
+        })
+        .then(res => res.json())
+        .then(data => {
+            consoleDiv.className = `console ${data.status}`;
+            consoleDiv.innerHTML = data.message;
+        })
+        .catch(() => {
+            consoleDiv.className = 'console error';
+            consoleDiv.textContent = 'Error connecting to local security backend.';
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => initSavedTarget('input_m2'));
+</script>
+{% endblock %}

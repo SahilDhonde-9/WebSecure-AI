@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% block title %}WebSecure AI — Scan Summary{% endblock %}
+{% block content %}
+<div class="banner grid-2">
+    <div class="card">
+        <div class="section-title">
+            <div>
+                <h2>Scan Summary</h2>
+                <p>Run a live scan and watch the progress animation update in real time.</p>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                <button class="secondary" onclick="runSecurityScan()">Run Live Scan</button>
+            </div>
+        </div>
+        <div class="field-group">
+            <label for="summaryTarget">Target Website / Domain</label>
+            <input id="summaryTarget" placeholder="example.com or https://example.com">
+        </div>
+        <div class="progress-shell">
+            <div class="progress-bar" id="summaryProgressBar"></div>
+        </div>
+        <div class="progress-label" id="summaryProgressLabel">🌐 Live Scan Progress will appear here.</div>
+    </div>
+    <div class="card">
+        <div class="metrics">
+            <div class="metric">
+                <strong>Security Score</strong>
+                <span id="scoreValue">--</span>
+            </div>
+            <div class="metric">
+                <strong>Risk Level</strong>
+                <span id="riskValue">--</span>
+            </div>
+            <div class="metric">
+                <strong>Last Scan</strong>
+                <span id="lastScan">--</span>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="banner grid-3" style="margin-top:0;">
+    <div class="card">
+        <h3>Scan Summary</h3>
+        <div class="console info" id="summaryOutput">Run a scan to populate this card.</div>
+    </div>
+    <div class="card">
+        <h3>SSL / DNS Details</h3>
+        <div class="console" id="detailsOutput">SSL, DNS and WHOIS details will appear here.</div>
+    </div>
+    <div class="card">
+        <h3>Gemini AI Recommendations</h3>
+        <div class="console" id="adviceOutput">Recommendations will populate after scan.</div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    const DEFSEC_TARGET_KEY = 'defsec_target';
+
+    function initSavedTarget(inputId) {
+        const stored = localStorage.getItem(DEFSEC_TARGET_KEY);
+        const input = document.getElementById(inputId);
+        if (stored) {
+            input.value = stored;
+        }
+        input.addEventListener('input', () => {
+            const value = input.value.trim();
+            if (value) {
+                localStorage.setItem(DEFSEC_TARGET_KEY, value);
+            } else {
+                localStorage.removeItem(DEFSEC_TARGET_KEY);
+            }
+        });
+    }
+
+    function updateProgress(progress) {
+        const bar = document.getElementById('summaryProgressBar');
+        const label = document.getElementById('summaryProgressLabel');
+        bar.style.width = `${progress}%`;
+        const blocks = '██████████'.slice(0, Math.round(progress / 10)).padEnd(10, '░');
+        label.textContent = `🌐 Live Scan Progress\nScanning...${blocks} ${progress}%`;
+    }
+
+    async function runSecurityScan() {
+        const targetInput = document.getElementById('summaryTarget');
+        const target = targetInput.value.trim();
+        const summaryOutput = document.getElementById('summaryOutput');
+        const detailsOutput = document.getElementById('detailsOutput');
+        const adviceOutput = document.getElementById('adviceOutput');
+        const scoreValue = document.getElementById('scoreValue');
+        const riskValue = document.getElementById('riskValue');
+        const lastScan = document.getElementById('lastScan');
+
+        if (!target) {
+            alert('Please enter a website or domain before scanning.');
+            targetInput.focus();
+            return;
+        }
+
+        summaryOutput.className = 'console info';
+        summaryOutput.textContent = 'Initializing live scan...';
+        detailsOutput.textContent = 'Preparing the target connection...';
+        adviceOutput.textContent = 'Creating security recommendations...';
+        updateProgress(10);
+
+        const timer = setInterval(() => {
+            const current = Number(document.getElementById('summaryProgressBar').style.width.replace('%', '')) || 0;
+            if (current < 90) {
+                updateProgress(Math.min(current + Math.floor(Math.random() * 11) + 5, 90));
+            }
+        }, 180);
+
+        try {
+            const response = await fetch('/run-scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target })
+            });
+            const data = await response.json();
+            clearInterval(timer);
+            updateProgress(100);
+
+            if (!response.ok) {
+                summaryOutput.className = 'console error';
+                summaryOutput.textContent = data.message || 'Live scan failed. Please try again.';
+                detailsOutput.textContent = '';
+                adviceOutput.textContent = '';
+                return;
+            }
+
+            scoreValue.textContent = `${data.score}/100`;
+            riskValue.textContent = data.risk;
+            if (data.risk === 'Low') riskValue.className = 'badge success';
+            else if (data.risk === 'Medium') riskValue.className = 'badge medium';
+            else riskValue.className = 'badge high';
+            lastScan.textContent = new Date().toLocaleString();
+
+            const sslText = data.ssl.ok ? `SSL OK (${data.ssl.subject})\nExpires in ${data.ssl.days_left ?? 'N/A'} days` : `SSL Failed: ${data.ssl.error}`;
+            const headerText = data.headers.ok ? `Found headers: ${data.headers.found.join(', ') || 'None'}` : `Header check failed: ${data.headers.error}`;
+
+            summaryOutput.className = 'console success';
+            summaryOutput.innerHTML = `Target: <strong>${data.target}</strong>\nScore: ${data.score}/100\nRisk Level: ${data.risk}`;
+            detailsOutput.innerHTML = `DNS: ${data.dns.ok ? 'Resolved to ' + data.dns.address : 'Failed'}\nSSL: ${sslText}\n${headerText}\n\nWHOIS:\n${data.whois}`;
+            adviceOutput.innerHTML = data.recommendations.map(item => `• ${item}`).join('\n');
+        
+        } catch (error) {
+            clearInterval(timer);
+            summaryOutput.className = 'console error';
+            summaryOutput.textContent = 'Unexpected error during scan. Please ensure the app is running and try again.';
+            detailsOutput.textContent = error.toString();
+            adviceOutput.textContent = '';
+        }
+    }
+
+    function printReport() {
+        window.print();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => initSavedTarget('summaryTarget'));
+</script>
+{% endblock %}

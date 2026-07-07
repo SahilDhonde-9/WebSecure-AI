@@ -1,0 +1,55 @@
+﻿{% extends 'base.html' %}
+{% block title %}WebSecure AI{% endblock %}
+{% block content %}
+<div class="banner" style="min-height:calc(100vh - 180px); display:flex; align-items:center; justify-content:center;">
+    <div class="card" style="width:min(720px,100%); display:flex; flex-direction:column; justify-content:center; gap:20px; padding:40px;">
+            <form id="homeTargetForm" style="width:100%; display:grid; gap:16px;">
+                <input id="homeTarget" placeholder="Enter domain and press Enter" autocomplete="off" style="width:100%; padding:22px 18px; font-size:1.05rem; border-radius:18px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:#f8fbff;" />
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                    <button class="primary" type="submit" style="min-width:140px;">Enter</button>
+                </div>
+            </form>
+        <div class="console info" id="homeStatus">Press Enter after typing the target to continue.</div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    const DEFSEC_TARGET_KEY = 'defsec_target';
+
+    function saveHomeTarget() {
+        const input = document.getElementById('homeTarget');
+        const value = input.value.trim();
+        const status = document.getElementById('homeStatus');
+        if (value) {
+            localStorage.setItem(DEFSEC_TARGET_KEY, value);
+            status.textContent = `Saved target: ${value}`;
+            status.className = 'console success';
+        } else {
+            status.textContent = 'Enter a domain to save it for the other pages.';
+            status.className = 'console info';
+            localStorage.removeItem(DEFSEC_TARGET_KEY);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const stored = localStorage.getItem(DEFSEC_TARGET_KEY);
+        const input = document.getElementById('homeTarget');
+        const form = document.getElementById('homeTargetForm');
+        if (stored) {
+            input.value = stored;
+            document.getElementById('homeStatus').textContent = `Saved target: ${stored}`;
+            document.getElementById('homeStatus').className = 'console success';
+        }
+        input.addEventListener('input', saveHomeTarget);
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const value = input.value.trim();
+            saveHomeTarget();
+            if (value) {
+                window.location.href = '/features';
+            }
+        });
+    });
+</script>
+{% endblock %}

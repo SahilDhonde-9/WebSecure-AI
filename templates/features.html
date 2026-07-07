@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+{% block title %}Features to Add{% endblock %}
+{% block content %}
+<div class="banner grid-2">
+    <div class="card">
+        <div class="section-title">
+            <div>
+                <h2>Features to Add</h2>
+                <p>Click any feature pill to run that scan mode and see live results.</p>
+            </div>
+            <!-- download button removed per user request -->
+        </div>
+        <div class="field-group">
+            <label for="featureTarget">Target Website / Domain</label>
+            <input id="featureTarget" placeholder="example.com or https://example.com">
+        </div>
+        <div class="field-group">
+            <label>Resolved IP Address</label>
+            <div class="console info" id="featureIp">Not resolved yet.</div>
+        </div>
+        <div class="pill-list">
+            <button class="pill" type="button" onclick="runFeature('ssl')">🔒 SSL Certificate Check</button>
+            <button class="pill" type="button" onclick="runFeature('headers')">🛡️ Security Headers Check</button>
+            <button class="pill" type="button" onclick="runFeature('dns')">🌍 DNS & WHOIS Lookup</button>
+            <button class="pill" type="button" onclick="runFeature('ports')">🚪 Common Port Check</button>
+            <button class="pill" type="button" onclick="runFeature('score')">📊 Security Score</button>
+            <button class="pill" type="button" onclick="runFeature('risk')">⚠️ Risk Level</button>
+            <button class="pill" type="button" onclick="runFeature('recommendations')">🤖 Gemini AI Recommendations</button>
+        </div>
+        <div class="progress-shell" style="display:none;" id="featureProgressShell">
+            <div class="progress-bar" id="featureProgressBar"></div>
+        </div>
+        <div class="progress-label" id="featureProgressLabel"></div>
+    </div>
+    <div class="card">
+        <h3>Feature Output</h3>
+        <div class="console info" id="featureSummary">Select a feature and run it against the target.</div>
+        <div class="console" id="featureDetails" style="margin-top:16px;">Results will appear here.</div>
+        <div class="console" id="featureAdvice" style="margin-top:16px;">Feature recommendations will appear here.</div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+    const DEFSEC_TARGET_KEY = 'defsec_target';
+
+    function initSavedTarget(inputId, statusId) {
+        const stored = localStorage.getItem(DEFSEC_TARGET_KEY);
+        const input = document.getElementById(inputId);
+        if (stored) {
+            input.value = stored;
+            if (statusId) {
+                const status = document.getElementById(statusId);
+                status.textContent = `Loaded saved target: ${stored}`;
+                status.className = 'console success';
+            }
+        }
+        input.addEventListener('input', () => {
+            const value = input.value.trim();
+            if (value) {
+                localStorage.setItem(DEFSEC_TARGET_KEY, value);
+            } else {
+                localStorage.removeItem(DEFSEC_TARGET_KEY);
+            }
+        });
+    }
+
+    function setFeatureProgress(progress) {
+        const shell = document.getElementById('featureProgressShell');
+        const bar = document.getElementById('featureProgressBar');
+        const label = document.getElementById('featureProgressLabel');
+        shell.style.display = 'block';
+        bar.style.width = `${progress}%`;
+        const blocks = '██████████'.slice(0, Math.round(progress / 10)).padEnd(10, '░');
+        label.textContent = `🌐 Live Scan Progress\nScanning...${blocks} ${progress}%`;
+    }
+
+    async function runFeature(feature) {
+        const targetInput = document.getElementById('featureTarget');
+        const target = targetInput.value.trim();
+        const summary = document.getElementById('featureSummary');
+        const details = document.getElementById('featureDetails');
+        const advice = document.getElementById('featureAdvice');
+
+        if (!target) {
+            alert('Please enter a website or domain before using a feature.');
+            targetInput.focus();
+            return;
+        }
+
+        summary.className = 'console info';
+        summary.textContent = 'Starting feature scan...';
+        details.textContent = 'Preparing request...';
+        advice.textContent = 'Fetching recommendations...';
+        setFeatureProgress(10);
+
+        const timer = setInterval(() => {
+            const current = Number(document.getElementById('featureProgressBar').style.width.replace('%', '')) || 0;
+            if (current < 90) {
+                setFeatureProgress(Math.min(current + Math.floor(Math.random() * 12) + 6, 90));
+            }
+        }, 220);
+
+        try {
+            const response = await fetch(feature === 'ports' ? '/port-check' : '/run-scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target })
+            });
+            const data = await response.json();
+            clearInterval(timer);
+            setFeatureProgress(100);
+
+            if (!response.ok) {
+                summary.className = 'console error';
+                summary.textContent = data.message || 'Feature request failed.';
+                details.textContent = '';
+                advice.textContent = '';
+                return;
+            }
+
+            const ipField = document.getElementById('featureIp');
+            if (feature === 'ports') {
+                summary.className = 'console success';
+                summary.textContent = `Port check complete for ${data.target}`;
+                details.innerHTML = `Open ports: ${data.open_ports.length ? data.open_ports.join(', ') : 'None'}\nClosed ports: ${data.closed_ports.length ? data.closed_ports.join(', ') : 'None'}`;
+                advice.textContent = 'Use the full scan page for a complete security picture.';
+                ipField.textContent = 'IP not resolved for port-only check.';
+                return;
+            }
+
+            ipField.textContent = data.dns && data.dns.ok ? data.dns.address : 'Unable to resolve IP.';
+            const sslText = data.ssl.ok ? `SSL OK (${data.ssl.subject})\nExpires in ${data.ssl.days_left ?? 'N/A'} days` : `SSL Failed: ${data.ssl.error}`;
+            const headerText = data.headers.ok ? `Found headers: ${data.headers.found.join(', ') || 'None'}` : `Header check failed: ${data.headers.error}`;
+
+            if (feature === 'ssl') {
+                summary.className = 'console success';
+                summary.textContent = `SSL certificate check finished.`;
+                details.textContent = sslText;
+            } else if (feature === 'headers') {
+                summary.className = 'console success';
+                summary.textContent = `Security headers report ready.`;
+                details.innerHTML = `Found: ${data.headers.found.join(', ') || 'None'}\nMissing: ${data.headers.missing.join(', ') || 'None'}`;
+            } else if (feature === 'dns') {
+                summary.className = 'console success';
+                summary.textContent = `DNS & WHOIS lookup complete.`;
+                details.innerHTML = `DNS: ${data.dns.ok ? 'Resolved to ' + data.dns.address : 'Failed'}\nWHOIS:\n${data.whois}`;
+            } else if (feature === 'score') {
+                summary.className = 'console success';
+                summary.textContent = `Security score: ${data.score}/100`;
+                details.textContent = `Risk level: ${data.risk}`;
+            } else if (feature === 'risk') {
+                summary.className = 'console warn';
+                summary.textContent = `Risk level: ${data.risk}`;
+                details.textContent = `Score: ${data.score}/100\n${sslText}`;
+            } else if (feature === 'recommendations') {
+                summary.className = 'console info';
+                summary.textContent = `Recommendations generated for ${data.target}`;
+                details.textContent = `Score: ${data.score}/100\nRisk: ${data.risk}`;
+            }
+            advice.innerHTML = data.recommendations.map(item => `• ${item}`).join('\n');
+        } catch (err) {
+            clearInterval(timer);
+            summary.className = 'console error';
+            summary.textContent = 'Unable to reach backend service.';
+            details.textContent = err.toString();
+            advice.textContent = '';
+            // download button removed; nothing to hide
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initSavedTarget('featureTarget', 'featureSummary');
+        // download button removed
+    });
+</script>
+{% endblock %}
